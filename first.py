@@ -18,27 +18,6 @@ bot_token = config['Telegram']['BOT_TOKEN']
 # Create a new Pyrogram client
 app = Client("my_bot", api_id=api_id, api_hash=api_hash, bot_token=bot_token)
 
-# # Define command handler for /start command
-# @app.on_message(filters.command(["start"]))
-# def start_command(client, message):
-#     # Define text and image to send
-#     text = "Welcome to my bot!"
-#     image_url = "https://graph.org/file/241ffc3db65af14e15477.png"
-
-#     # Define inline keyboard with multiple buttons
-#     keyboard = [
-#             [
-#               InlineKeyboardButton("Button 1", callback_data="button1"),
-#               InlineKeyboardButton("Button 2", callback_data="button2")
-#             ],
-#             [
-#               InlineKeyboardButton("Button 3", callback_data="button3")
-#             ]
-#     ]
-#     reply_markup = InlineKeyboardMarkup(keyboard)
-
-#     # Send message with image and buttons
-#     message.reply_photo(image_url, caption=text, reply_markup=reply_markup)
 
 # Define command handler
 @app.on_message(filters.command(["search"]))
