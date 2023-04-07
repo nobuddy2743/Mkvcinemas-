@@ -1,8 +1,8 @@
 from pyrogram import Client, filters
 from pyrogram.types import Message
 import configparser
-from playwright.sync_api import Playwright, sync_playwright
 import re
+from playwright.sync_api import Playwright, sync_playwright
 
 # Load config file using configparser
 config = configparser.ConfigParser()
@@ -19,9 +19,10 @@ app = Client("my_bot", api_id=api_id, api_hash=api_hash, bot_token=bot_token)
 @app.on_message(filters.command("mkv"))
 def mkv_command(client: Client, message: Message):
     # Get the link from the message text using regex
-    link = re.search(r"(?P<url>https?://[^\s]+)", message.text)
+    link_match = re.search(r"(?P<url>https?://[^\s]+)", message.text)
+    link = link_match.group("url") if link_match else None
 
-    if not link or "mkvcinema" not in link.group("url"):
+    if not link or "mkvcinema" not in link:
         message.reply_text("Invalid URL. Please provide a valid URL containing 'mkvcinema'.")
 
     else:
@@ -30,7 +31,7 @@ def mkv_command(client: Client, message: Message):
 
         try:
             # Call the process_link function to process the link
-            result = run(link.group("url"))
+            result = run(link)
 
             # Reply with the processed link
             message.reply_text(f"Link processed successfully! {result}", disable_web_page_preview=True)
