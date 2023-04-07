@@ -15,15 +15,20 @@ bot_token = config['Telegram']['BOT_TOKEN']
 # Create a new Pyrogram client
 app = Client("my_bot", api_id=api_id, api_hash=api_hash, bot_token=bot_token)
 
+# Define the mkv_command function
 @app.on_message(filters.command("mkv"))
 def mkv_command(client: Client, message: Message):
     # Get the link from the message text
     link = message.text.split(" ")[1]
 
     # Call the process_link function to process the link
-    run(link, message)
+    with sync_playwright() as playwright:
+        Flink = run(playwright, link, message)
 
-def run(playwright: Playwright, link: str, message) -> str:
+    # Reply with the processed link
+    message.reply_text(f"Link processed successfully! {Flink}")
+
+def run(playwright: Playwright, link: str, message: Message) -> str:
     browser = playwright.chromium.launch(headless=True)
     context = browser.new_context()
     page = context.new_page()
@@ -35,15 +40,10 @@ def run(playwright: Playwright, link: str, message) -> str:
     page1 = page1_info.value
     Flink = page1.url
 
-    # Reply with the processed link
-    message.reply_text(f"Link processed successfully! {Flink}")
-
     # ---------------------
     context.close()
     browser.close()
 
-
-with sync_playwright() as playwright:
-    run(playwright)
+    return Flink
 
 app.run()
