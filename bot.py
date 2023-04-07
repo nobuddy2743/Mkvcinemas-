@@ -1,7 +1,6 @@
 from pyrogram import Client, filters
 from pyrogram.types import Message
 import configparser
-import re
 from playwright.sync_api import Playwright, sync_playwright
 
 # Load config file using configparser
@@ -18,32 +17,25 @@ app = Client("my_bot", api_id=api_id, api_hash=api_hash, bot_token=bot_token)
 
 @app.on_message(filters.command("mkv"))
 def mkv_command(client: Client, message: Message):
-    # Get the link from the message text using regex
-    link_match = re.search(r"(?P<url>https?://[^\s]+)", message.text)
-    link = link_match.group("url") if link_match else None
+    try:
+        # Get the link from the message text
+        link = message.text.split(" ")[1]
 
-    if not link or "mkvcinema" not in link:
-        message.reply_text("Invalid URL. Please provide a valid URL containing 'mkvcinema'.")
+        # Send a waiting message
+        wait_message = message.reply_text("Please wait while processing the link...")
 
-    else:
-        # Send a typing indicator to let the user know that the program is working
-        message.reply_chat_action("typing")
+        # Call the process_link function to process the link
+        run(link, message, wait_message)
 
-        try:
-            # Call the process_link function to process the link
-            result = run(link)
+    except IndexError:
+        # Handle index error (when there is no link provided)
+        message.reply_text("Please provide a link after the command, like this: /mkv https://example.com")
 
-            # Reply with the processed link
-            message.reply_text(f"Link processed successfully! {result}", disable_web_page_preview=True)
+    except Exception as e:
+        # Handle any other exception
+        message.reply_text(f"An error occurred: {e}")
 
-            # Send a confirmation message to let the user know that the link can now be used
-            message.reply_text("You can now use the link.")
-
-        except Exception as e:
-            # Handle any exceptions that may occur
-            message.reply_text(f"An error occurred: {str(e)}")
-
-def run(link: str) -> str:
+def run(link: str, message, wait_message):
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
         context = browser.new_context()
@@ -56,10 +48,15 @@ def run(link: str) -> str:
         page1 = page1_info.value
         Flink = page1.url
 
+        # Reply with the processed link
+        message.reply_text(f"Link processed successfully! {Flink}", disable_web_page_preview=True)
+
+        # Delete the waiting message
+        wait_message.delete()
+
         # ---------------------
         context.close()
         browser.close()
 
-        return Flink
 
 app.run()
