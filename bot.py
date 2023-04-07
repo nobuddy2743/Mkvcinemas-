@@ -21,27 +21,29 @@ def mkv_command(client: Client, message: Message):
     link = message.text.split(" ")[1]
 
     # Call the process_link function to process the link
-    process_link(link, message)
+    run(link, message)
 
-def process_link(link, message):
-    with sync_playwright() as playwright:
-        browser = playwright.chromium.launch(headless=True)
-        context = browser.new_context()
-        page = context.new_page()
-        page.goto(link)
-        page.locator("#soralink-human-verif-main").click()
-        page.locator("#generater").click()
-        with page.expect_popup() as page1_info:
-            page.locator("#showlink").click()
-        page1 = page1_info.value
-        Flink = page1.url
-        print(Flink)
+def run(playwright: Playwright, link: str, message) -> str:
+    browser = playwright.chromium.launch(headless=True)
+    context = browser.new_context()
+    page = context.new_page()
+    page.goto(link)
+    page.locator("#soralink-human-verif-main").click()
+    page.locator("#generater").click()
+    with page.expect_popup() as page1_info:
+        page.locator("#showlink").click()
+    page1 = page1_info.value
+    Flink = page1.url
 
-        # ---------------------
-        context.close()
-        browser.close()
+    # Reply with the processed link
+    message.reply_text(f"Link processed successfully! {Flink}")
 
-        # Reply with the processed link
-        message.reply_text(f"Link processed successfully! {Flink}")
+    # ---------------------
+    context.close()
+    browser.close()
+
+
+with sync_playwright() as playwright:
+    run(playwright)
 
 app.run()
