@@ -1,5 +1,9 @@
 FROM ubuntu:20.04
 
+# Set the timezone to UTC
+ENV TZ=UTC
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
+
 WORKDIR /usr/src/app
 RUN chmod 777 /usr/src/app
 RUN apt-get update && apt-get install -y python3 python3-pip && \
