@@ -1,10 +1,7 @@
 from pyrogram import Client, filters
-from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-from requests import get as rget
-from bs4 import BeautifulSoup
-from urllib.parse import quote
+from pyrogram.types import Message
 import configparser
-import time
+from playwright.sync_api import Playwright, sync_playwright
 
 # Load config file using configparser
 config = configparser.ConfigParser()
@@ -18,56 +15,33 @@ bot_token = config['Telegram']['BOT_TOKEN']
 # Create a new Pyrogram client
 app = Client("my_bot", api_id=api_id, api_hash=api_hash, bot_token=bot_token)
 
+@app.on_message(filters.command("mkv"))
+def mkv_command(client: Client, message: Message):
+    # Get the link from the message text
+    link = message.text.split(" ")[1]
 
-# Define command handler
-@app.on_message(filters.command(["search"]))
-def search_command(client, message):
-    # Get the movie name to search for
-    if len(message.text.split()) > 1:
-        movie_name = message.text.split("/search ")[1]
-        if movie_name.strip() == "" or "http" in movie_name:
-            message.reply_text("Search is wrong. Please enter a valid movie name.")
-            return
-    else:
-        message.reply_text("Please enter a movie name to search.")
-        return
+    # Call the process_link function to process the link
+    process_link(link, message)
 
-    # TODO: Implement movie search code here
-    res = rget(f"https://gdbot.xyz/search?q={quote(movie_name)}").text
-    soup = BeautifulSoup(res, 'html.parser')
-    tsear = soup.select("li")
-    if not tsear:
-        message.reply_text(f"No results found for '{movie_name}'.")
-        return
-    msg = ''
-    for ss in tsear[4:]:
-        b_list = ss.select("a[href*='gdbot.xyz']")
-        if not b_list:
-            continue
-        b = b_list[0]
-        msg += f'\n<b>{b.text}</b>'
-        msg += f'{ss.select("span")[0].text}'
-        resp = rget(b['href']).text
-        nsoup = BeautifulSoup(resp, 'html.parser')
-        gdtotL = nsoup.select("a[href*='gdtot']")
-        if not gdtotL:
-            continue
-        gdtotL = gdtotL[0]['href']
-        msg += f'\n{gdtotL}'
-        
-        # Split the message if it exceeds 4096 characters
-        if len(msg) > 4096:
-            message.reply_text(msg[:4096], disable_web_page_preview=True)
-            msg = msg[4096:]
-            time.sleep(1) # add a delay of 1 second between messages
+def process_link(link, message):
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        context = browser.new_context()
+        page = context.new_page()
+        page.goto(link)
+        page.locator("#soralink-human-verif-main").click()
+        page.locator("#generater").click()
+        with page.expect_popup() as page1_info:
+            page.locator("#showlink").click()
+        page1 = page1_info.value
+        Flink = page1.url
+        print(Flink)
 
-    # Reply with a message indicating that the search is complete
-    if msg:
-        message.reply_text(msg, disable_web_page_preview=True)
-        message.reply_text(f"Search for '{movie_name}' is complete.", disable_web_page_preview=True)
-    else:
-        message.reply_text(f"No results found for '{movie_name}'.")
+        # ---------------------
+        context.close()
+        browser.close()
 
+        # Reply with the processed link
+        message.reply_text(f"Link processed successfully! {Flink}")
 
-# Start the bot
 app.run()
