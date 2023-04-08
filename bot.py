@@ -36,27 +36,34 @@ def mkv_command(client: Client, message: Message):
         message.reply_text(f"An error occurred: {e}")
 
 def run(link: str, message, wait_message):
-    with sync_playwright() as playwright:
-        browser = playwright.chromium.launch(headless=True)
-        context = browser.new_context()
-        page = context.new_page()
-        page.goto(link)
-        page.locator("#soralink-human-verif-main").click()
-        page.locator("#generater").click()
-        with page.expect_popup() as page1_info:
-            page.locator("#showlink").click()
-        page1 = page1_info.value
-        Flink = page1.url
+    try:
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch(headless=True)
+            context = browser.new_context()
+            page = context.new_page()
+            page.goto(link)
+            page.locator("#soralink-human-verif-main").click()
+            page.locator("#generater").click()
+            with page.expect_popup() as page1_info:
+                page.locator("#showlink").click()
+            page1 = page1_info.value
+            Flink = page1.url
 
-        # Reply with the processed link
-        message.reply_text(f"Link processed successfully! {Flink}", disable_web_page_preview=True)
+            # Reply with the processed link
+            message.reply_text(f"Link processed successfully! {Flink}", disable_web_page_preview=True)
+
+            # Delete the waiting message
+            wait_message.delete()
+
+            # ---------------------
+            context.close()
+            browser.close()
+
+    except Exception as e:
+        # Handle any exception that occurred during link processing
+        message.reply_text(f"An error occurred while processing the link: {e}")
 
         # Delete the waiting message
         wait_message.delete()
-
-        # ---------------------
-        context.close()
-        browser.close()
-
 
 app.run()
