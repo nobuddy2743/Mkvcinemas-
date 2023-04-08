@@ -42,9 +42,18 @@ def run(link: str, message, wait_message):
             context = browser.new_context()
             page = context.new_page()
             page.goto(link)
+
+            # Wait for the element to become visible and then click it
+            page.wait_for_selector("#soralink-human-verif-main")
             page.locator("#soralink-human-verif-main").click()
+
+            # Click the second button after waiting for it to become visible
+            page.wait_for_selector("#generater")
             page.locator("#generater").click()
+
+            # Wait for and handle the popup window
             with page.expect_popup() as page1_info:
+                page.wait_for_selector("#showlink")
                 page.locator("#showlink").click()
             page1 = page1_info.value
             Flink = page1.url
