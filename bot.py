@@ -109,7 +109,12 @@ def gdtot_command(client, message):
         link = message.text.split(" ")[1]
 
         # Extract the match object from the link using regex
-        match = re.findall(r'https?://(.+)\.gdtot\.(.+)\/\S+\/\S+', link)[0]
+        match = re.findall(r'https?://(.+)\.gdtot\.(.+)\/\S+\/\S+', link)
+        if match:
+            match = match[0]
+        else:
+            message.reply_text("Invalid GDTOT link.")
+            return
 
         with requests.Session() as session:
             # Update the session cookies with the GDTOT crypt value
