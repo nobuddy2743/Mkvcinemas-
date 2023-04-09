@@ -1,16 +1,14 @@
-import re
-import time
-import psutil
-import requests
-import urllib.parse
-import configparser
 from bs4 import BeautifulSoup
+import requests
+import io
+from PIL import Image
 from pyrogram import Client, filters
-from base64 import b64decode
-from playwright.sync_api import Playwright, sync_playwright
-from requests import get as rget
-from urllib.parse import quote
 from pyrogram.types import Message
+from playwright.sync_api import Playwright, sync_playwright
+from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+import configparser
+import re
+
 
 # Load config file using configparser
 config = configparser.ConfigParser()
@@ -20,137 +18,157 @@ config.read('config.env')
 api_id = int(config['Telegram']['API_ID'])
 api_hash = config['Telegram']['API_HASH']
 bot_token = config['Telegram']['BOT_TOKEN']
-GDTOT_CRYPT = "RzR4ZHZoeG9DSUQrVWg4aG1HaGplQnphVmo0OFFMMzFYMzhmdG14Q2pyVT0%3D"
-DRIVE_URL_TEMPLATE = "https://drive.google.com/open?id={}"
-INDEX_URL_TEMPLATE = "https://wzml.wzmlcloud.workers.dev/0:/GDToT/{}"
 
 # Create a new Pyrogram client
 app = Client("my_bot", api_id=api_id, api_hash=api_hash, bot_token=bot_token)
 
-# MOVIE SEARCH CODE
-# Define command handler
-@app.on_message(filters.command(["search"]))
-def search_command(client, message):
-    # Get the movie name to search for
-    if len(message.text.split()) > 1:
-        movie_name = message.text.split("/search ")[1]
-        if movie_name.strip() == "" or "http" in movie_name:
-            message.reply_text("Search is wrong. Please enter a valid movie name.")
-            return
-    else:
-        message.reply_text("Please enter a movie name to search.")
-        return
+def scrape(query):
+    # Construct the URL for the search query
+    url = f"https://ww3.mkvcinemas.lat/?s={query}"
+    response = requests.get(url)
 
-    # TODO: Implement movie search code here
-    res = rget(f"https://gdbot.xyz/search?q={quote(movie_name)}").text
-    soup = BeautifulSoup(res, 'html.parser')
-    tsear = soup.select("li")
-    if not tsear:
-        message.reply_text(f"No results found for '{movie_name}'.")
-        return
-    msg = ''
-    for ss in tsear[4:]:
-        b_list = ss.select("a[href*='gdbot.xyz']")
-        if not b_list:
-            continue
-        b = b_list[0]
-        msg += f'\n<b>{b.text}</b>'
-        msg += f'{ss.select("span")[0].text}'
-        resp = rget(b['href']).text
-        nsoup = BeautifulSoup(resp, 'html.parser')
-        gdtotL = nsoup.select("a[href*='gdtot']")
-        if not gdtotL:
-            continue
-        gdtotL = gdtotL[0]['href']
-        msg += f'\n{gdtotL}'
-        
-        # Split the message if it exceeds 4096 characters
-        if len(msg) > 4096:
-            message.reply_text(msg[:4096], disable_web_page_preview=True)
-            msg = msg[4096:]
-            time.sleep(1) # add a delay of 1 second between messages
+    # Parse the HTML content of the website using BeautifulSoup
+    soup = BeautifulSoup(response.content, 'html.parser')
 
-    # Reply with a message indicating that the search is complete
-    if msg:
-        message.reply_text(msg, disable_web_page_preview=True)
-        message.reply_text(f"Search for '{movie_name}' is complete.", disable_web_page_preview=True)
-    else:
-        message.reply_text(f"No results found for '{movie_name}'.")
+    # Find the first element that has both "ml-mask" and "jt" as its class attributes
+    element = soup.find(class_=["ml-mask", "jt"])
 
-# STATS CODE
-# define the command handler for /stats command
-@app.on_message(filters.command("stats"))
-def get_system_stats(client, message):
-    # get system memory and CPU usage
-    memory = psutil.virtual_memory()
-    cpu = psutil.cpu_percent()
+    # Extract the href, title, and thumbnail attributes from the first element
+    if element:
+        href = element.get('href')
+        title = element.get('oldtitle')
+        thumbnail_tag = soup.find('img', {'class': 'mli-thumb'})
+        thumbnail = thumbnail_tag['src'] if thumbnail_tag else None
 
-    # get disk usage stats
-    disk = psutil.disk_usage('/')
-    disk_total = round(disk.total / (1024*1024*1024), 2)
-    disk_used = round(disk.used / (1024*1024*1024), 2)
-    disk_free = round(disk.free / (1024*1024*1024), 2)
+        # Return a dictionary containing the href, title, and thumbnail
+        if title and href:
+            return {'href': href, 'title': title, 'thumbnail': thumbnail}
+    return None
 
-    # get network usage stats
-    network = psutil.net_io_counters()
-    sent = round(network.bytes_sent / (1024*1024), 2)
-    received = round(network.bytes_recv / (1024*1024), 2)
-
-    # format the system stats message
-    stats_message = f"System Stats:\n\nCPU Usage: {cpu}%\nMemory Usage: {memory.percent}%\nDisk Usage: {disk_used}GB / {disk_total}GB ({disk.percent}%)\nNetwork Usage: {sent}MB sent / {received}MB received"
-
-    # send the system stats message
-    message.reply_text(stats_message)
-
-# GDTOT CODE
-@app.on_message(filters.command(["gdtot"]))
-def gdtot_command(client, message):
+@ app.on_message(filters.command('search'))
+def search(client, message):
+    # Get the search query from the message text and replace spaces with '+'
     try:
-        link = message.text.split(" ")[1]
-
-        # Extract the match object from the link using regex
-        match = re.findall(r'https?://(.+)\.gdtot\.(.+)\/\S+\/\S+', link)
-        if match:
-            match = match[0]
-        else:
-            message.reply_text("Invalid GDTOT link.")
-            return
-
-        with requests.Session() as session:
-            # Update the session cookies with the GDTOT crypt value
-            session.cookies.update({'crypt': GDTOT_CRYPT})
-
-            # Make a GET request to the GDTOT link
-            session.get(link)
-
-            # Make another GET request to fetch the actual download link
-            res = session.get(f"https://{match[0]}.gdtot.{match[1]}/dld?id={link.split('/')[-1]}")
-
-            try:
-                # Decode the Google Drive ID from the response using base64 decoding
-                encoded_string = re.findall('gd=(.*?)&', res.text)[0]
-                decoded_id = b64decode((encoded_string + '==').encode()).decode('utf-8')
-                drive_link = DRIVE_URL_TEMPLATE.format(decoded_id)
-                response = requests.get(link)
-                soup = BeautifulSoup(response.text, 'html.parser')
-                headings = soup.find_all('h5', {'class': 'm-0 font-weight-bold'})
-                results = []
-                for heading in headings:
-                    string_to_encode = heading.text.strip()
-                    encoded_string = urllib.parse.quote(string_to_encode)
-                    results.append((drive_link, INDEX_URL_TEMPLATE.format(encoded_string)))
-                for result in results:
-                    message.reply_text(f"Executing GDTOT link: {result[0]}\n\nExecuting Index link: {result[1]}", disable_web_page_preview=True)
-            except (IndexError, TypeError, ValueError) as e:
-                message.reply_text(f"Error: {e}")
+        query = message.text.split(' ', 1)[1].replace(' ', '+')
     except IndexError:
-        message.reply_text("Invalid GDTOT link provided. Please check and try again.")
+        message.reply_text("Please provide a search query.")
+        return
 
-# MKVBYPASS
+    # Scrape the website for the first search result
+    search_result = scrape(query)
+
+    # Send the search result as a reply to the user
+    if search_result:
+        caption = f"title: {search_result['title']}\nhref: {search_result['href']}"
+        message.reply_text(caption)
+    else:
+        message.reply_text("No search results found.")
+
+# Define the command handler
+@app.on_message(filters.command("latest"))
+def take_screenshot(client, message):
+    # Get the URL of the webpage
+    url = "https://ww3.mkvcinemas.lat/category/all-movies-and-tv-shows/"
+
+    # Launch the browser with Playwright
+    with sync_playwright() as playwright:
+        browser_type = playwright.chromium
+        browser = browser_type.launch()
+        page = browser.new_page()
+
+        # Navigate to the webpage
+        page.goto(url)
+
+        # Set the viewport size to the dimensions of the webpage
+        content_size = page.evaluate(
+            "() => ({ width: document.documentElement.scrollWidth, height: document.documentElement.scrollHeight })"
+        )
+        page.set_viewport_size(content_size)
+
+        # Take a screenshot of the entire page
+        screenshot = page.screenshot(full_page=True)
+
+        # Close the browser
+        browser.close()
+
+    # Convert the screenshot to a PIL Image
+    img = Image.open(io.BytesIO(screenshot))
+
+    # Send the screenshot to the user
+    with io.BytesIO() as bio:
+        img.save(bio, 'PNG')
+        bio.seek(0)
+        client.send_photo(
+            chat_id=message.chat.id,
+            photo=bio,
+            caption="Screenshot of the latest version of the webpage",
+        )
+
+
+def get_links(url):
+    response = requests.get(url)
+    html_content = response.text
+    soup = BeautifulSoup(html_content, "html.parser")
+    gdlinks = soup.find_all("a", class_="gdlink")
+    if gdlinks:
+        pattern_480p = re.compile(r"\b480p\b", re.IGNORECASE)
+        pattern_720p = re.compile(r"\b720p\b", re.IGNORECASE)
+        pattern_1080p = re.compile(r"\b1080p\b", re.IGNORECASE)
+        links = {"480p": [], "720p": [], "1080p": [], "Unknown": []}
+        for link in gdlinks:
+            href = link.get("href")
+            title = link.get("title")
+            if "s0" in title.lower():
+                resolution = None
+                if pattern_480p.search(title):
+                    resolution = "480p"
+                elif pattern_720p.search(title):
+                    resolution = "720p"
+                elif pattern_1080p.search(title):
+                    resolution = "1080p"
+                else:
+                    resolution = "Unknown"
+                links[resolution].append((title, href))
+        return links
+    else:
+        all_links = soup.find_all("a", href=lambda href: href and "https://ww3.mkvcinemas.lat?" in href)
+        response_msg = ""
+        for i, link in enumerate(all_links, start=1):
+            text = link.text.strip()
+            hyperlink = link["href"]
+            response_msg += f'{i}. [{text}]({hyperlink})\n'
+        return response_msg
+
+def send_links(client, message, links):
+    if any(links.values()):
+        for resolution, link_list in links.items():
+            if link_list:
+                response_msg = f"{resolution} links:\n"
+                for i, (title, href) in enumerate(link_list, start=1):
+                    response_msg += f"{i}. <a href='{href}'>{title}</a>\n"
+                message.reply_text(response_msg, disable_web_page_preview=True)
+    else:
+        message.reply_text(links, disable_web_page_preview=True)
+
+@app.on_message(filters.command("links"))
+def handle_links_command(client, message):
+    try:
+        url = message.text.split(" ", 1)[1]
+        if not re.match(r'http(s)?://', url):
+            raise ValueError("Invalid URL")
+        links = get_links(url)
+        send_links(client, message, links)
+    except ValueError:
+        client.send_message(message.chat.id, "Please provide a valid URL.")
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        client.send_message(message.chat.id, "Sorry, an error occurred while processing your request.")
+
+
 # Define the process_link function
 def process_link(playwright: Playwright, link: str, message: Message) -> str:
     try:
-        browser = playwright.chromium.launch(headless=True)
+        browser = playwright.chromium.launch(headless=False)
         context = browser.new_context()
         page = context.new_page()
         page.goto(link)
@@ -208,6 +226,7 @@ def mkv_command(client: Client, message: Message):
         # When an error occurs during the processing of the link
         message.reply_text(f"An error occurred while processing the link: {e}", quote=True)
 
+
 # Define the mkv_command function
 @app.on_message(filters.command("mkva"))
 def mkvcinemas(client: Client, message: Message):
@@ -262,6 +281,8 @@ def mkvcinemas(client: Client, message: Message):
     except Exception as e:
         # When an error occurs during the processing of the link
         message.reply_text(f"An error occurred while processing the link: {e}", quote=True)
+
+
 
 
 # Start the bot
