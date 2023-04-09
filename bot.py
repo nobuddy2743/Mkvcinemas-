@@ -104,17 +104,32 @@ def take_screenshot(client, message):
             caption="Screenshot of the latest version of the webpage",
         )
 
+# Define a command handler for "/links" command
+@app.on_message(filters.command("links"))
+def get_links(client, message):
+    # Get the URL from the command arguments
+    url = message.text.split(" ", 1)[1]
 
-def get_links(url):
+    # Fetch the HTML content of the URL
     response = requests.get(url)
     html_content = response.text
+
+    # Parse the HTML content using BeautifulSoup
     soup = BeautifulSoup(html_content, "html.parser")
+
+    # Find all the links with the class "gdlink"
     gdlinks = soup.find_all("a", class_="gdlink")
+
     if gdlinks:
+        # Define regular expressions to match the resolution of the video
         pattern_480p = re.compile(r"\b480p\b", re.IGNORECASE)
         pattern_720p = re.compile(r"\b720p\b", re.IGNORECASE)
         pattern_1080p = re.compile(r"\b1080p\b", re.IGNORECASE)
+
+        # Initialize a dictionary to store the links by resolution
         links = {"480p": [], "720p": [], "1080p": [], "Unknown": []}
+
+        # Loop through each link and categorize them based on the resolution
         for link in gdlinks:
             href = link.get("href")
             title = link.get("title")
@@ -129,40 +144,34 @@ def get_links(url):
                 else:
                     resolution = "Unknown"
                 links[resolution].append((title, href))
-        return links
+
+        # Send the links and titles in each category as separate messages
+        if any(links.values()):
+            for resolution, link_list in links.items():
+                if link_list:
+                    response_msg = f"{resolution} links:\n"
+                    for i, (title, href) in enumerate(link_list, start=1):
+                        response_msg += f"{i}. <a href='{href}'>{title}</a>\n"
+                    message.reply_text(response_msg, disable_web_page_preview=True)
+        else:
+            # Prepare a response message for "gdlink" class links
+            response_msg = ""
+            for i, gdlink in enumerate(gdlinks, start=1):
+                title = gdlink.text.strip()
+                hyperlink = gdlink["href"]
+                response_msg += f'{i}. [{title}]({hyperlink})\n'
+            message.reply_text(response_msg, disable_web_page_preview=True)
     else:
+        # Find all links that contain "https://ww3.mkvcinemas.lat?"
         all_links = soup.find_all("a", href=lambda href: href and "https://ww3.mkvcinemas.lat?" in href)
+
+        # Prepare a response message for the found links
         response_msg = ""
         for i, link in enumerate(all_links, start=1):
             text = link.text.strip()
             hyperlink = link["href"]
             response_msg += f'{i}. [{text}]({hyperlink})\n'
-        return response_msg
-
-def send_links(client, message, links):
-    if any(links.values()):
-        for resolution, link_list in links.items():
-            if link_list:
-                response_msg = f"{resolution} links:\n"
-                for i, (title, href) in enumerate(link_list, start=1):
-                    response_msg += f"{i}. <a href='{href}'>{title}</a>\n"
-                message.reply_text(response_msg, disable_web_page_preview=True)
-    else:
-        message.reply_text(links, disable_web_page_preview=True)
-
-@app.on_message(filters.command("links"))
-def handle_links_command(client, message):
-    try:
-        url = message.text.split(" ", 1)[1]
-        if not re.match(r'http(s)?://', url):
-            raise ValueError("Invalid URL")
-        links = get_links(url)
-        send_links(client, message, links)
-    except ValueError:
-        client.send_message(message.chat.id, "Please provide a valid URL.")
-    except Exception as e:
-        print(f"An error occurred: {e}")
-        client.send_message(message.chat.id, "Sorry, an error occurred while processing your request.")
+        message.reply_text(response_msg, disable_web_page_preview=True)
 
 
 # Define the process_link function
